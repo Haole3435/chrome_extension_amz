@@ -9,7 +9,7 @@
 let scheduledUpdateTrackingTask = null;
 
 // Danh sách các domain Amazon
-const AMAZON_DOMAINS = [
+const UPDATE_TRACKING_DOMAINS = [
   "https://sellercentral.amazon.com",
   "https://sellercentral-europe.amazon.com",
   "https://sellercentral.amazon.de",
@@ -173,7 +173,7 @@ function startUpdateTracking() {
   chrome.tabs.query({}, (tabs) => {
     // Tìm tab Amazon đang mở
     const amazonTab = tabs.find(tab => 
-      AMAZON_DOMAINS.some(domain => tab.url && tab.url.includes(domain.replace("https://", "")))
+      UPDATE_TRACKING_DOMAINS.some(domain => tab.url && tab.url.includes(domain.replace("https://", "")))
     );
     
     if (amazonTab) {
