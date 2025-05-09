@@ -57,11 +57,12 @@
     }
   ],
   "background": {
-    "service_worker": "scripts/background.js"
+    "service_worker": "scripts/background.js",
+    "type": "module"
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'",
-    "sandbox": "sandbox allow-scripts; script-src 'self' 'https://sellercentral.amazon.com/*'; object-src 'self'"
+    "sandbox": "sandbox allow-scripts; script-src 'self' https://sellercentral.amazon.com/; object-src 'self'"
   },
   "permissions": [
     "storage",
@@ -88,7 +89,9 @@
     {
       "resources": [
         "assets/images/not-found.png",
-        "assets/images/completed.png"
+        "assets/images/completed.png",
+        "scripts/update_tracking_scheduler.js",
+        "scripts/auto_sync_scheduler.js"
       ],
       "matches": [
         "https://sellercentral.amazon.com/*",
