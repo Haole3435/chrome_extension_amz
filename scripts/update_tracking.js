@@ -55,9 +55,42 @@ chrome.runtime.onMessage.addListener(async (req, sender, res) => {
       // This allows the popup to show when the next update is scheduled
       chrome.storage.local.get(['nextUpdateTrackingTime', 'autoUpdateTrackingEnabled'], function(result) {
          if (res) {
+            // Calculate remaining time
+            let remainingTime = "";
+            let nextRun = "";
+            
+            if (result.nextUpdateTrackingTime) {
+               const nextUpdateTime = new Date(result.nextUpdateTrackingTime);
+               const now = new Date();
+               
+               // Calculate remaining time in minutes
+               const timeUntilUpdate = nextUpdateTime.getTime() - now.getTime();
+               const minutesRemaining = Math.floor(timeUntilUpdate / (1000 * 60));
+               const hoursRemaining = Math.floor(minutesRemaining / 60);
+               const minsRemaining = minutesRemaining % 60;
+               
+               if (timeUntilUpdate > 0) {
+                  if (hoursRemaining > 0) {
+                     remainingTime = `${hoursRemaining} giờ ${minsRemaining} phút`;
+                  } else {
+                     remainingTime = `${minsRemaining} phút`;
+                  }
+                  
+                  // Format next run time (9:15 AM today or tomorrow)
+                  const isToday = nextUpdateTime.getDate() === now.getDate() && 
+                                  nextUpdateTime.getMonth() === now.getMonth() && 
+                                  nextUpdateTime.getFullYear() === now.getFullYear();
+                  
+                  const timeString = nextUpdateTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                  nextRun = isToday ? `Hôm nay lúc ${timeString}` : `Ngày mai lúc ${timeString}`;
+               }
+            }
+            
             res({
                enabled: result.autoUpdateTrackingEnabled !== false,
-               nextUpdateTime: result.nextUpdateTrackingTime
+               nextUpdateTime: result.nextUpdateTrackingTime,
+               remainingTime: remainingTime,
+               nextRun: nextRun
             });
          }
       });

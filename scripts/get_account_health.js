@@ -158,9 +158,42 @@ chrome.runtime.onMessage.addListener(async (req, sender, res) => {
         // Xử lý kiểm tra trạng thái từ popup hoặc background script
         chrome.storage.local.get(['nextAccountHealthTime', 'autoAccountHealthEnabled'], function(result) {
             if (res) {
+                // Tính toán thời gian còn lại
+                let remainingTime = "";
+                let nextRun = "";
+                
+                if (result.nextAccountHealthTime) {
+                    const nextAccountHealthTime = new Date(result.nextAccountHealthTime);
+                    const now = new Date();
+                    
+                    // Tính toán thời gian còn lại (phút)
+                    const timeUntilUpdate = nextAccountHealthTime.getTime() - now.getTime();
+                    const minutesRemaining = Math.floor(timeUntilUpdate / (1000 * 60));
+                    const hoursRemaining = Math.floor(minutesRemaining / 60);
+                    const minsRemaining = minutesRemaining % 60;
+                    
+                    if (timeUntilUpdate > 0) {
+                        if (hoursRemaining > 0) {
+                            remainingTime = `${hoursRemaining} giờ ${minsRemaining} phút`;
+                        } else {
+                            remainingTime = `${minsRemaining} phút`;
+                        }
+                        
+                        // Định dạng thời gian chạy tiếp theo (9:30 hôm nay hoặc ngày mai)
+                        const isToday = nextAccountHealthTime.getDate() === now.getDate() && 
+                                       nextAccountHealthTime.getMonth() === now.getMonth() && 
+                                       nextAccountHealthTime.getFullYear() === now.getFullYear();
+                        
+                        const timeString = nextAccountHealthTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                        nextRun = isToday ? `Hôm nay lúc ${timeString}` : `Ngày mai lúc ${timeString}`;
+                    }
+                }
+                
                 res({
                     enabled: result.autoAccountHealthEnabled !== false,
-                    nextUpdateTime: result.nextAccountHealthTime
+                    nextUpdateTime: result.nextAccountHealthTime,
+                    remainingTime: remainingTime,
+                    nextRun: nextRun
                 });
             }
         });
