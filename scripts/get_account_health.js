@@ -17,6 +17,157 @@ $(document).on("click", "#account-health", function () {
     });
 });
 
+// Biến lưu trữ hẹn giờ cho account health
+let scheduledAccountHealthTask = null;
+
+// Hàm đặt lịch tự động cập nhật account health vào 9h30 sáng mỗi ngày
+function scheduleAccountHealth() {
+    const now = new Date();
+    const updateTime = new Date();
+    
+    // Đặt thời gian cập nhật là 9h30 sáng
+    updateTime.setHours(9, 30, 0, 0);
+    
+    // Nếu thời gian hiện tại đã qua 9h30 sáng, đặt lịch cho ngày mai
+    if (now > updateTime) {
+        updateTime.setDate(updateTime.getDate() + 1);
+    }
+    
+    // Tính toán khoảng thời gian từ hiện tại đến thời điểm cập nhật (milliseconds)
+    const timeUntilUpdate = updateTime.getTime() - now.getTime();
+    
+    console.log(`[ACCOUNT HEALTH] Lịch cập nhật account health tiếp theo: ${updateTime.toLocaleString()}`);
+    console.log(`[ACCOUNT HEALTH] Còn: ${Math.floor(timeUntilUpdate / (1000 * 60))} phút`);
+    
+    // Xóa lịch trình cũ nếu có
+    if (scheduledAccountHealthTask) {
+        clearTimeout(scheduledAccountHealthTask);
+    }
+    
+    // Đặt lịch mới
+    scheduledAccountHealthTask = setTimeout(() => {
+        console.log('[ACCOUNT HEALTH] Bắt đầu tự động cập nhật account health lúc 9h30 sáng');
+        // Kiểm tra xem có đang ở trang Amazon không
+        chrome.tabs.query({}, (tabs) => {
+            // Tìm tab Amazon đang mở
+            const amazonDomains = [
+                "https://sellercentral.amazon.com",
+                "https://sellercentral-europe.amazon.com",
+                "https://sellercentral.amazon.de",
+                "https://sellercentral.amazon.co.uk",
+            ];
+            
+            const amazonTab = tabs.find(tab => 
+                amazonDomains.some(domain => tab.url && tab.url.includes(domain.replace("https://", "")))
+            );
+            
+            if (amazonTab) {
+                // Nếu đã có tab Amazon, kích hoạt nó
+                chrome.tabs.update(amazonTab.id, {active: true});
+                // Gửi thông báo để bắt đầu cập nhật account health
+                setTimeout(() => {
+                    chrome.tabs.sendMessage(amazonTab.id, { 
+                        message: "startAccountHealthAuto"
+                    });
+                }, 2000);
+            } else {
+                // Nếu chưa có tab Amazon, mở trang Amazon mới
+                chrome.tabs.create({ 
+                    url: "https://sellercentral.amazon.com/home",
+                    active: true 
+                }, (tab) => {
+                    // Đợi tab load xong
+                    chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
+                        if (tabId === tab.id && changeInfo.status === 'complete') {
+                            // Tab đã load xong, đợi thêm 5 giây để trang hoàn toàn ổn định
+                            setTimeout(() => {
+                                chrome.tabs.sendMessage(tab.id, { 
+                                    message: "startAccountHealthAuto"
+                                });
+                                // Xóa event listener
+                                chrome.tabs.onUpdated.removeListener(listener);
+                            }, 5000);
+                        }
+                    });
+                });
+            }
+        });
+        
+        // Đặt lịch cho ngày hôm sau
+        scheduleAccountHealth();
+    }, timeUntilUpdate);
+    
+    // Lưu trạng thái và thời gian cập nhật tiếp theo
+    chrome.storage.local.set({ 
+        'nextAccountHealthTime': updateTime.toISOString(),
+        'autoAccountHealthEnabled': true
+    });
+}
+
+// Khởi tạo lịch cập nhật account health khi extension được load
+(function initAccountHealthScheduler() {
+    // Kiểm tra trạng thái tự động cập nhật từ storage
+    chrome.storage.local.get(['autoAccountHealthEnabled'], function(result) {
+        // Mặc định bật tính năng tự động cập nhật
+        const enabled = result.autoAccountHealthEnabled !== false;
+        
+        if (enabled) {
+            // Khởi tạo lịch trình
+            scheduleAccountHealth();
+            console.log('[ACCOUNT HEALTH] Đã khởi tạo lịch trình tự động cập nhật account health');
+        } else {
+            console.log('[ACCOUNT HEALTH] Tự động cập nhật account health đã bị tắt');
+        }
+    });
+})();
+
+// caption event form background
+chrome.runtime.onMessage.addListener(async (req, sender, res) => {
+    const { message, data } = req || {};
+   
+    // Always send a response to prevent connection errors
+    if (res) {
+        res({ message: "received" });
+    }
+   
+    if (message === "updateAccountHealth") {
+        $(".loader").removeClass("loader");
+        const { error } = data || {};
+        if (error) {
+            notifyError(error);
+            return;
+        }
+        notifySuccess("Account health completed.");
+    } else if (message === "startAccountHealthAuto") {
+        console.log("[ACCOUNT HEALTH] Received auto update trigger");
+        
+        try {
+            // Thực hiện cập nhật account health
+            await getAccountHealth();
+            console.log("[ACCOUNT HEALTH] Auto update completed successfully");
+        } catch (error) {
+            console.error("[ACCOUNT HEALTH] Error performing auto update:", error);
+            // Cố gắng hiển thị thông báo lỗi nếu có thể
+            try {
+                notifyError("Failed to perform automatic account health update: " + error.message);
+            } catch (e) {
+                console.error("[ACCOUNT HEALTH] Could not show error notification:", e);
+            }
+        }
+    } else if (message === "checkAccountHealthStatus") {
+        // Xử lý kiểm tra trạng thái từ popup hoặc background script
+        chrome.storage.local.get(['nextAccountHealthTime', 'autoAccountHealthEnabled'], function(result) {
+            if (res) {
+                res({
+                    enabled: result.autoAccountHealthEnabled !== false,
+                    nextUpdateTime: result.nextAccountHealthTime
+                });
+            }
+        });
+        return true; // Giữ kênh mở cho phản hồi bất đồng bộ
+    }
+});
+
 // Hàm chính thực hiện việc lấy dữ liệu Account Health
 async function getAccountHealth() {
     console.log('Get account health clicked!');
@@ -257,8 +408,11 @@ async function getAccountHealth() {
         console.log('accountAmazon :>> ', accountAmazon);
         console.log("Account Health Data:", jsonData);
         await sendPostRequest("https://bkteam.top/dungvuong-admin/api/Order_Sync_Amazon_to_System_Api_v2.php?case=getAccountHealth", jsonData);
+        
+        return { success: true };
     } catch (err) {
         console.error("Error in getAccountHealth:", err);
+        return { error: err.message };
     }
 }
 

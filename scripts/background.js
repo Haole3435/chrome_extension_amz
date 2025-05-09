@@ -2814,6 +2814,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 if (typeof self !== 'undefined') {
   try {
     importScripts('/scripts/auto_sync_scheduler.js');
+    importScripts('/scripts/update_tracking_scheduler.js');
     
     if (typeof AutoSyncScheduler !== 'undefined') {
       console.log('[BACKGROUND] Khởi tạo AutoSyncScheduler...');
@@ -2828,79 +2829,51 @@ if (typeof self !== 'undefined') {
             if (result.autoSyncEnabled && !result.nextSyncTime) {
               console.log('[BACKGROUND] Phát hiện scheduler không hoạt động, khởi động lại...');
               try {
-                AutoSyncScheduler.schedule();
-              } catch(error) {
-                console.error('[BACKGROUND] Lỗi khi khởi động lại scheduler:', error);
+                AutoSyncScheduler.init();
+              } catch (e) {
+                console.error('[BACKGROUND] Lỗi khi khởi động lại scheduler:', e);
               }
             }
           });
         }, 60 * 60 * 1000); // Kiểm tra mỗi giờ
-        
-      } catch(error) {
-        console.error('[BACKGROUND] Lỗi khi khởi tạo AutoSyncScheduler:', error);
-        
-        // Thử khởi tạo lại sau 1 phút nếu có lỗi
-        setTimeout(() => {
-          try {
-            console.log('[BACKGROUND] Thử khởi tạo lại AutoSyncScheduler...');
-            AutoSyncScheduler.init();
-          } catch(error) {
-            console.error('[BACKGROUND] Không thể khởi tạo lại AutoSyncScheduler:', error);
-          }
-        }, 60 * 1000);
+      } catch (e) {
+        console.error('[BACKGROUND] Lỗi khi khởi tạo Auto Sync Scheduler:', e);
       }
     } else {
-      console.error('[BACKGROUND] Không tìm thấy AutoSyncScheduler, kiểm tra file auto_sync_scheduler.js');
+      console.error('[BACKGROUND] Auto Sync Scheduler không được định nghĩa!');
     }
-  } catch(error) {
-    console.error('[BACKGROUND] Lỗi khi import auto_sync_scheduler.js:', error);
-  }
-}
 
-// Tích hợp Update Tracking Scheduler
-if (typeof self !== 'undefined') {
-  try {
-    importScripts('/scripts/update_tracking_scheduler.js');
-    
-    if (typeof UpdateTrackingScheduler !== 'undefined') {
-      console.log('[BACKGROUND] Khởi tạo UpdateTrackingScheduler...');
-      
-      // Xử lý lỗi khi khởi tạo Update Tracking Scheduler
-      try {
-        UpdateTrackingScheduler.init();
-        
-        // Thêm cơ chế kiểm tra định kỳ để đảm bảo scheduler vẫn hoạt động
-        setInterval(() => {
-          chrome.storage.local.get(['autoUpdateTrackingEnabled', 'nextUpdateTrackingTime'], function(result) {
-            if (result.autoUpdateTrackingEnabled && !result.nextUpdateTrackingTime) {
-              console.log('[BACKGROUND] Phát hiện update tracking scheduler không hoạt động, khởi động lại...');
-              try {
-                UpdateTrackingScheduler.schedule();
-              } catch(error) {
-                console.error('[BACKGROUND] Lỗi khi khởi động lại update tracking scheduler:', error);
-              }
+    // Sau khi đã có account_health message handler, thêm message khởi chạy nghiệp vụ get account health
+    chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+      if (request.message === "runGetAccountHealth") {
+        // Mở trang Amazon để thực hiện lấy account health
+        chrome.tabs.create({
+          url: "https://sellercentral.amazon.com/home",
+          active: true
+        }, function(tab) {
+          // Đợi tab load xong
+          chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
+            if (tabId === tab.id && changeInfo.status === 'complete') {
+              // Tab đã load xong, đợi thêm 2 giây để trang hoàn toàn ổn định
+              setTimeout(() => {
+                chrome.tabs.sendMessage(tab.id, { 
+                  message: "startAccountHealthAuto" 
+                });
+                // Xóa event listener
+                chrome.tabs.onUpdated.removeListener(listener);
+              }, 2000);
             }
           });
-        }, 60 * 60 * 1000); // Kiểm tra mỗi giờ
+        });
         
-      } catch(error) {
-        console.error('[BACKGROUND] Lỗi khi khởi tạo UpdateTrackingScheduler:', error);
-        
-        // Thử khởi tạo lại sau 1 phút nếu có lỗi
-        setTimeout(() => {
-          try {
-            console.log('[BACKGROUND] Thử khởi tạo lại UpdateTrackingScheduler...');
-            UpdateTrackingScheduler.init();
-          } catch(error) {
-            console.error('[BACKGROUND] Không thể khởi tạo lại UpdateTrackingScheduler:', error);
-          }
-        }, 60 * 1000);
+        // Trả lời ngay cho sender
+        sendResponse({ message: "received" });
+        return true; // Keep message channel open
       }
-    } else {
-      console.error('[BACKGROUND] Không tìm thấy UpdateTrackingScheduler, kiểm tra file update_tracking_scheduler.js');
-    }
-  } catch(error) {
-    console.error('[BACKGROUND] Lỗi khi import update_tracking_scheduler.js:', error);
+    });
+
+  } catch (e) {
+    console.error('[BACKGROUND] Lỗi khi import auto_sync_scheduler.js:', e);
   }
 }
 
