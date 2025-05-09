@@ -73,6 +73,13 @@ async function updateSchedulerStatus() {
             }, function(response) {
                 accountHealthStatusDisplay(response);
             });
+            
+            // Check ads report scheduler status
+            chrome.tabs.sendMessage(tabs[0].id, {
+                message: "checkAdsReportStatus"
+            }, function(response) {
+                adsReportStatusDisplay(response);
+            });
         }
     });
 }
@@ -143,6 +150,52 @@ function accountHealthStatusDisplay(response) {
         `;
         
         // Thêm vào sau update-tracking-status
+        $(container).appendTo("#scheduler-status");
+    } else {
+        // Cập nhật nội dung nếu container đã tồn tại
+        statusContainer.find(".status").text(response.enabled ? 'Đã kích hoạt' : 'Đã tắt');
+        if (response.nextRun) {
+            if (statusContainer.find(".next-run").length) {
+                statusContainer.find(".next-run").text(`Chạy tiếp theo: ${response.nextRun}`);
+            } else {
+                statusContainer.append(`<div class="next-run">Chạy tiếp theo: ${response.nextRun}</div>`);
+            }
+        }
+        
+        if (response.remainingTime) {
+            if (statusContainer.find(".remaining-time").length) {
+                statusContainer.find(".remaining-time").text(`Còn lại: ${response.remainingTime}`);
+            } else {
+                statusContainer.append(`<div class="remaining-time">Còn lại: ${response.remainingTime}</div>`);
+            }
+        }
+    }
+}
+
+// Hiển thị trạng thái của ads report
+function adsReportStatusDisplay(response) {
+    if (!response) return;
+    
+    const statusContainer = $("#ads-report-status");
+    const schedulerContainer = $("#scheduler-status");
+    
+    if (!schedulerContainer.length) {
+        // Nếu chưa có container cha, thì cần đợi update-tracking tạo ra
+        return;
+    }
+    
+    if (!statusContainer.length) {
+        // Nếu chưa có container cho ads report, thêm mới
+        const container = `
+            <div id="ads-report-status" class="scheduler-item">
+                <h3>Tải Báo Cáo Quảng Cáo (9:45 sáng)</h3>
+                <div class="status">${response.enabled ? 'Đã kích hoạt' : 'Đã tắt'}</div>
+                ${response.nextRun ? `<div class="next-run">Chạy tiếp theo: ${response.nextRun}</div>` : ''}
+                ${response.remainingTime ? `<div class="remaining-time">Còn lại: ${response.remainingTime}</div>` : ''}
+            </div>
+        `;
+        
+        // Thêm vào sau account-health-status
         $(container).appendTo("#scheduler-status");
     } else {
         // Cập nhật nội dung nếu container đã tồn tại
